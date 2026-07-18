@@ -292,7 +292,7 @@ function buildSteps(): Array<{ tool: ToolName; label: string; icon: string; icon
 
 // ─── Build Review Result per template ────────────────────────────────────────
 
-function buildReviewResult(template: PrTemplate, _memory: MemoryEntry[]): ReviewResult {
+function buildReviewResult(template: PrTemplate): ReviewResult {
   if (template.id === 'hallucinated-bug') {
     return {
       verdict: 'APPROVE',
@@ -439,7 +439,7 @@ export async function runAgent(opts: AgentRunOptions): Promise<void> {
   await sleep(400);
 
   // Build and return review result
-  const reviewResult = buildReviewResult(template, memory);
+  const reviewResult = buildReviewResult(template);
   onComplete(reviewResult);
 
   if (reviewResult.newMemoryEntries.length > 0) {

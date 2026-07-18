@@ -98,7 +98,10 @@ export default function Dashboard() {
   });
 
   useEffect(() => {
-    loadMemory(activeRepo, selectedTemplate.repoMemory);
+    const timer = window.setTimeout(() => {
+      void loadMemory(activeRepo, selectedTemplate.repoMemory);
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [activeRepo, loadMemory, selectedTemplate.repoMemory]);
 
   useEffect(() => {
