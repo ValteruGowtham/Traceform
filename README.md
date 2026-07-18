@@ -47,6 +47,13 @@ Traceform comes with a beautiful Next.js-based interactive simulator that lets y
 
 4. Open [http://localhost:3000](http://localhost:3000) in your browser.
 
+### Available Scripts
+
+- `npm run dev` — start local development server
+- `npm run lint` — run ESLint checks
+- `npm run build` — build production bundle
+- `npm run test` — run focused automated tests
+
 ## 🎮 Using the Simulator
 
 The dashboard includes 4 built-in PR scenarios to demonstrate how Traceform thinks:
@@ -71,6 +78,7 @@ Traceform provides a webhook endpoint ready for GitHub integration:
 
 - **URL**: `https://your-domain.com/api/webhook/github`
 - **Events**: `pull_request` (`opened`, `synchronize`, `reopened`)
+- **Security**: set `GITHUB_WEBHOOK_SECRET` and configure the same secret in GitHub webhook settings (HMAC SHA-256 signature verification is enforced)
 
 When a PR event is received, Traceform spins up an asynchronous worker to run the review loop and post inline comments back to the PR using the GitHub API.
 
@@ -80,6 +88,24 @@ When a PR event is received, Traceform spins up an asynchronous worker to run th
 - **Styling**: Custom Spatial Glassmorphism (Vanilla CSS, CSS Variables)
 - **Agent Loop**: Custom simulated tool-use engine (ready to be swapped with Claude/Gemini Tool Use APIs)
 - **Streaming**: Server-Sent Events (SSE) for real-time trace logs
+
+## 🧱 Architecture Overview
+
+- `src/app/page.tsx` orchestrates dashboard state and memory persistence.
+- `src/components/dashboard/*` contains split UI components for sidebar, trace/review panel, and memory inspector.
+- `src/hooks/useSimulatorRun.ts` handles SSE stream parsing, deterministic step updates, and failure states.
+- `src/app/api/*` contains validated API routes with consistent JSON error contracts.
+- `src/lib/memory.ts` persists repository memory to `.pr-reviewer-memory/`.
+
+## ✅ Local Validation
+
+Run this before opening a PR:
+
+```bash
+npm run lint
+npm run build
+npm run test
+```
 
 ## 📄 License
 

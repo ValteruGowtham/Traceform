@@ -1,28 +1,41 @@
-// ─── Memory API Route ─────────────────────────────────────────────────────────
-// GET  /api/memory?repo=acme-corp/payments-api
-// POST /api/memory   { repo, entries }
-// DELETE /api/memory?repo=acme-corp/payments-api
-
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { getMemory, saveMemory, clearMemory } from '@/lib/memory';
+import { jsonData, jsonError, parseJsonBody } from '@/lib/api/http';
+import { MAX_BODY_BYTES, isValidRepoSlug, validateMemorySaveRequest } from '@/lib/api/validation';
 
 export async function GET(req: NextRequest) {
   const repo = req.nextUrl.searchParams.get('repo') || '';
+  if (!isValidRepoSlug(repo)) {
+    return jsonError('VALIDATION_ERROR', 'repo query param must be a valid <owner>/<name> slug', 400);
+  }
+
   const entries = getMemory(repo);
-  return NextResponse.json({ repo, entries });
+  return jsonData({ repo, entries });
 }
 
 export async function POST(req: NextRequest) {
-  const { repo, entries } = await req.json();
-  if (!repo || !Array.isArray(entries)) {
-    return NextResponse.json({ error: 'repo and entries[] required' }, { status: 400 });
+  const parsedBody = await parseJsonBody(req, MAX_BODY_BYTES);
+  if (!parsedBody.ok) {
+    const status = parsedBody.code === 'BODY_TOO_LARGE' ? 413 : 400;
+    return jsonError(parsedBody.code, parsedBody.message, status);
   }
+
+  const validation = validateMemorySaveRequest(parsedBody.value);
+  if (!validation.ok) {
+    return jsonError('VALIDATION_ERROR', validation.message, 400);
+  }
+
+  const { repo, entries } = validation.value;
   saveMemory(repo, entries);
-  return NextResponse.json({ ok: true, count: entries.length });
+  return jsonData({ ok: true, count: entries.length });
 }
 
 export async function DELETE(req: NextRequest) {
   const repo = req.nextUrl.searchParams.get('repo') || '';
+  if (!isValidRepoSlug(repo)) {
+    return jsonError('VALIDATION_ERROR', 'repo query param must be a valid <owner>/<name> slug', 400);
+  }
+
   clearMemory(repo);
-  return NextResponse.json({ ok: true });
+  return jsonData({ ok: true });
 }
