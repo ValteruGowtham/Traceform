@@ -7,7 +7,6 @@ import {
   AgentStep,
   MemoryEntry,
   PrTemplate,
-  ReviewComment,
   ReviewResult,
 } from '../templates';
 
@@ -277,7 +276,7 @@ describe('[Agent Verification] N+1 detection', () => {
 
 // ─── Build Agent Steps per template ──────────────────────────────────────────
 
-function buildSteps(template: PrTemplate): Array<{ tool: ToolName; label: string; icon: string; iconClass: string }> {
+function buildSteps(): Array<{ tool: ToolName; label: string; icon: string; iconClass: string }> {
   const base = [
     { tool: 'checkout_branch' as ToolName, label: 'Checkout branch', icon: '🌿', iconClass: 'step-checkout' },
     { tool: 'get_git_diff' as ToolName, label: 'Read PR diff', icon: '📋', iconClass: 'step-diff' },
@@ -293,9 +292,7 @@ function buildSteps(template: PrTemplate): Array<{ tool: ToolName; label: string
 
 // ─── Build Review Result per template ────────────────────────────────────────
 
-function buildReviewResult(template: PrTemplate, memory: MemoryEntry[]): ReviewResult {
-  const dismissedKeys = memory.filter((m) => m.category === 'dismissed').map((m) => m.key);
-
+function buildReviewResult(template: PrTemplate, _memory: MemoryEntry[]): ReviewResult {
   if (template.id === 'hallucinated-bug') {
     return {
       verdict: 'APPROVE',
@@ -342,7 +339,6 @@ function buildReviewResult(template: PrTemplate, memory: MemoryEntry[]): ReviewR
   }
 
   if (template.id === 'style-dismissed') {
-    const skipped = dismissedKeys.includes('param-formatting');
     return {
       verdict: 'APPROVE',
       summary: `Adding explicit TypeScript types to middleware parameters is correct and aligns with the repo's strict TS config. Multi-line parameter formatting is an accepted convention (memory: param-formatting). All tests pass.`,
@@ -409,7 +405,7 @@ export interface AgentRunOptions {
 
 export async function runAgent(opts: AgentRunOptions): Promise<void> {
   const { template, memory, onStep, onComplete, onNewMemory } = opts;
-  const stepDefs = buildSteps(template);
+  const stepDefs = buildSteps();
 
   const steps: AgentStep[] = stepDefs.map((s) => ({
     id: crypto.randomUUID(),

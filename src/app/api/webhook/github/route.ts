@@ -1,43 +1,80 @@
-// ─── GitHub Webhook Route ──────────────────────────────────────────────────────
-// POST /api/webhook/github
-// Receives GitHub PR events and triggers agent review.
-
-import { NextRequest, NextResponse } from 'next/server';
-import { getMemory, addMemoryEntry } from '@/lib/memory';
+import { NextRequest } from 'next/server';
+import { getMemory } from '@/lib/memory';
 import { PR_TEMPLATES } from '@/lib/templates';
+import { jsonData, jsonError } from '@/lib/api/http';
+import { isValidRepoSlug } from '@/lib/api/validation';
+import { verifyGithubWebhookSignature } from '@/lib/security/githubWebhook';
+
+const ALLOWED_ACTIONS = new Set(['opened', 'synchronize', 'reopened']);
+
+function parsePayload(body: unknown):
+  | { ok: true; value: { action: string; repo: string; prNumber: number; branch: string } }
+  | { ok: false; message: string } {
+  if (typeof body !== 'object' || body === null) {
+    return { ok: false, message: 'Body must be an object' };
+  }
+
+  const raw = body as Record<string, unknown>;
+  const action = raw.action;
+  const repository = raw.repository as Record<string, unknown> | undefined;
+  const pullRequest = raw.pull_request as Record<string, unknown> | undefined;
+  const head = pullRequest?.head as Record<string, unknown> | undefined;
+
+  const repo = repository?.full_name;
+  const prNumber = pullRequest?.number;
+  const branch = head?.ref;
+
+  if (typeof action !== 'string') return { ok: false, message: 'action must be a string' };
+  if (typeof repo !== 'string' || !isValidRepoSlug(repo)) return { ok: false, message: 'repository.full_name must be a valid repo slug' };
+  if (typeof prNumber !== 'number') return { ok: false, message: 'pull_request.number must be a number' };
+  if (typeof branch !== 'string' || branch.length === 0) return { ok: false, message: 'pull_request.head.ref must be a non-empty string' };
+
+  return { ok: true, value: { action, repo, prNumber, branch } };
+}
 
 export async function POST(req: NextRequest) {
   const event = req.headers.get('x-github-event');
   if (event !== 'pull_request') {
-    return NextResponse.json({ skipped: true, reason: 'Not a PR event' });
+    return jsonData({ skipped: true, reason: 'Not a PR event' });
   }
 
-  let body: Record<string, unknown>;
+  const secret = process.env.GITHUB_WEBHOOK_SECRET;
+  if (!secret) {
+    return jsonError('MISCONFIGURED', 'GITHUB_WEBHOOK_SECRET is not configured', 503);
+  }
+
+  let rawBody = '';
   try {
-    body = await req.json();
+    rawBody = await req.text();
   } catch {
-    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
+    return jsonError('INVALID_JSON', 'Unable to read request body', 400);
   }
 
-  const action = body.action as string;
-  if (!['opened', 'synchronize', 'reopened'].includes(action)) {
-    return NextResponse.json({ skipped: true, action });
+  const signature = req.headers.get('x-hub-signature-256');
+  if (!verifyGithubWebhookSignature(rawBody, signature, secret)) {
+    return jsonError('UNAUTHORIZED', 'Invalid webhook signature', 401);
   }
 
-  const pr = body.pull_request as Record<string, unknown>;
-  const repo = (body.repository as Record<string, unknown>)?.full_name as string;
-  const prNumber = pr?.number as number;
-  const branch = (pr?.head as Record<string, unknown>)?.ref as string;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(rawBody);
+  } catch {
+    return jsonError('INVALID_JSON', 'Request body must be valid JSON', 400);
+  }
 
-  // Load repo memory for context
+  const payload = parsePayload(parsed);
+  if (!payload.ok) {
+    return jsonError('VALIDATION_ERROR', payload.message, 400);
+  }
+
+  const { action, repo, prNumber, branch } = payload.value;
+  if (!ALLOWED_ACTIONS.has(action)) {
+    return jsonData({ skipped: true, action });
+  }
+
   const memory = getMemory(repo);
 
-  // In production: kick off async agent run here (queue, worker, etc.)
-  // For demo: return metadata immediately.
-  console.log(`[webhook] PR #${prNumber} on ${repo} (${branch}) — would trigger agent review`);
-  console.log(`[webhook] Loaded ${memory.length} memory entries for ${repo}`);
-
-  return NextResponse.json({
+  return jsonData({
     received: true,
     repo,
     pr: prNumber,
@@ -49,7 +86,7 @@ export async function POST(req: NextRequest) {
 }
 
 export async function GET() {
-  return NextResponse.json({
+  return jsonData({
     service: 'Traceform — Execution-Backed Code Review',
     instructions: [
       '1. In your GitHub repo → Settings → Webhooks → Add webhook',

@@ -165,6 +165,11 @@ body {
   display: flex;
   align-items: center;
   gap: 14px;
+  width: 100%;
+  text-align: left;
+  color: inherit;
+  background: transparent;
+  font: inherit;
 }
 
 .list-item:hover {
@@ -337,6 +342,9 @@ body {
   padding: 16px;
   cursor: pointer;
   transition: all var(--transition);
+  text-align: left;
+  color: inherit;
+  font: inherit;
 }
 
 .trace-content:hover { border-color: rgba(255,255,255,0.2); }

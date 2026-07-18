@@ -1,25 +1,30 @@
-// ─── Simulator API Route ──────────────────────────────────────────────────────
-// POST /api/simulator/run
-// Receives a template id + current memory, returns SSE stream of agent events.
-
 import { NextRequest } from 'next/server';
 import { PR_TEMPLATES } from '@/lib/templates';
+import { jsonError, parseJsonBody } from '@/lib/api/http';
+import { MAX_BODY_BYTES, validateSimulatorRunRequest } from '@/lib/api/validation';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: NextRequest) {
-  const body = await req.json();
-  const { templateId, memory = [] } = body;
-
-  const template = PR_TEMPLATES.find((t) => t.id === templateId);
-  if (!template) {
-    return new Response(JSON.stringify({ error: 'Unknown template' }), { status: 400 });
+  const parsedBody = await parseJsonBody(req, MAX_BODY_BYTES);
+  if (!parsedBody.ok) {
+    const status = parsedBody.code === 'BODY_TOO_LARGE' ? 413 : 400;
+    return jsonError(parsedBody.code, parsedBody.message, status);
   }
 
-  // Import agent dynamically (server-only)
-  const { runAgent } = await import('@/lib/agent/agent');
+  const validation = validateSimulatorRunRequest(parsedBody.value);
+  if (!validation.ok) {
+    return jsonError('VALIDATION_ERROR', validation.message, 400);
+  }
 
+  const { templateId, memory = [] } = validation.value;
+  const template = PR_TEMPLATES.find((t) => t.id === templateId);
+  if (!template) {
+    return jsonError('UNKNOWN_TEMPLATE', 'Unknown template', 400);
+  }
+
+  const { runAgent } = await import('@/lib/agent/agent');
   const encoder = new TextEncoder();
 
   const stream = new ReadableStream({
@@ -31,7 +36,6 @@ export async function POST(req: NextRequest) {
 
       try {
         emit('start', { template: { id: template.id, pr: template.pr, repo: template.repo } });
-
         await runAgent({
           template,
           memory,
